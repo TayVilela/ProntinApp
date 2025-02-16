@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "79635579998",
+    "project_id": "prontin-b4b5f",
+    "storage_bucket": "prontin-b4b5f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:79635579998:android:627124985515d13dd4a0cf",
+        "android_client_info": {
+          "package_name": "com.example.prontin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAgww9j3DJ5aSAnrGLIrv8vLkSqarRSHl0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
