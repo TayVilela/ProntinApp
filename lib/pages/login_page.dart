@@ -138,7 +138,7 @@ class _LoginPageState extends State<LoginPage> {
                       usersServices.signIn(
                         email: _email.text,
                         password: _password.text,
-                        onSucess: () {
+                        onSuccess: () {
                           Navigator.of(context).pushReplacement(
                             MaterialPageRoute(builder: (context) => MainPage()),
                           );
@@ -194,62 +194,68 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
- void _showForgotPasswordDialog(BuildContext context) {
-  TextEditingController emailController = TextEditingController();
+  void _showForgotPasswordDialog(BuildContext context) {
+    TextEditingController emailController = TextEditingController();
 
-  showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text("Recuperação de Senha"),
-        content: TextField(
-          controller: emailController,
-          decoration: const InputDecoration(labelText: "Digite seu e-mail"),
-          keyboardType: TextInputType.emailAddress,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar"),
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Recuperação de Senha",style: TextStyle(color: Colors.black),),
+          content: TextField(
+            controller: emailController,
+            style: const TextStyle(color: Colors.black),
+            decoration: const InputDecoration(
+              labelText: "Digite seu e-mail",
+              labelStyle: const TextStyle(color: Colors.black),
+            ),
+            keyboardType: TextInputType.emailAddress,
           ),
-          ElevatedButton(
-            onPressed: () async {
-              if (emailController.text.isNotEmpty) {
-                bool success = await Provider.of<UsersServices>(context, listen: false)
-                    .resetPassword(emailController.text);
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (emailController.text.isNotEmpty) {
+                  bool success =
+                      await Provider.of<UsersServices>(context, listen: false)
+                          .resetPassword(emailController.text);
 
-                Navigator.pop(context); // Fecha o diálogo de input
+                  Navigator.pop(context); 
 
-                // Exibe a confirmação
-                _showConfirmationDialog(context, success
-                    ? "E-mail enviado! Verifique sua caixa de entrada."
-                    : "Erro ao enviar e-mail. Verifique o endereço informado.");
-              }
-            },
-            child: const Text("Enviar"),
-          ),
-        ],
-      );
-    },
-  );
-}
+                  // exibe a confirmação
+                  _showConfirmationDialog(
+                      context,
+                      success
+                          ? "E-mail enviado! Verifique sua caixa de entrada."
+                          : "Erro ao enviar e-mail. Verifique o endereço informado.");
+                }
+              },
+              child: const Text("Enviar"),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
-void _showConfirmationDialog(BuildContext context, String message) {
-  showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text("Recuperação de Senha"),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
-          ),
-        ],
-      );
-    },
-  );
-}
-
+  void _showConfirmationDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Recuperação de Senha"),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK"),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }

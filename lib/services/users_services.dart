@@ -1,27 +1,66 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:prontin/models/users.dart';
-import 'package:provider/provider.dart';
+import 'package:prontin/pages/login_page.dart';
 
 class UsersServices extends ChangeNotifier {
-  final FirebaseAuth _auth = FirebaseAuth.instance; //instancia do firebaseauth
-  final FirebaseFirestore _firestore = FirebaseFirestore
-      .instance; //instancia do firebasestore p/ se comunicar com firebase
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Users? users;
   Users? currentUser;
-  Users? get CurrentUser => currentUser;
-
-  DocumentReference get _firestoreRef => _firestore.doc(
-      'users/${users!.id}'); //metodo para pegar referencai e criar firestore
 
   UsersServices() {
-    print("Inicializando UsersServices...");
-    print("Usuário autenticado? ${_auth.currentUser?.uid}");
-    _loadingCurrentUser();
-    loadUserProfile();
-    listenForEmailChange(); // Agora escutamos mudanças no e-mail
+    print("🔄 Inicializando UsersServices...");
+    loadCurrentUser();
+    listenForEmailChange();
+  }
+
+  Future<void> loadCurrentUser() async {
+    User? firebaseUser = _auth.currentUser;
+
+    if (firebaseUser == null) {
+      print("⚠️ Nenhum usuário autenticado.");
+      currentUser = null;
+      notifyListeners();
+      return;
+    }
+
+    print("🔍 Obtendo dados do Firestore para UID: ${firebaseUser.uid}");
+
+    DocumentSnapshot<Map<String, dynamic>> userDoc =
+        await _firestore.collection('users').doc(firebaseUser.uid).get();
+
+    if (userDoc.exists && userDoc.data() != null) {
+      print("✅ Usuário encontrado! Dados: ${userDoc.data()}");
+
+      if (userDoc.data()?['email'] != firebaseUser.email) {
+        print("⚠️ Corrigindo e-mail no Firestore...");
+        await _firestore.collection('users').doc(firebaseUser.uid).update({
+          'email': firebaseUser.email,
+        });
+      }
+
+      currentUser = Users.fromJson(userDoc.data()!);
+    } else {
+      print(
+          "⚠️ Nenhum dado encontrado para este usuário, criando novo perfil.");
+
+      currentUser = Users(
+        id: firebaseUser.uid,
+        email: firebaseUser.email!,
+        userName: "Novo Usuário",
+        name: "Sem Nome",
+      );
+
+      await _firestore
+          .collection('users')
+          .doc(firebaseUser.uid)
+          .set(currentUser!.toJson());
+    }
+
+    notifyListeners();
   }
 
   Future<bool> signUp(String email, String password, String name,
@@ -31,12 +70,9 @@ class UsersServices extends ChangeNotifier {
               email: email, password: password))
           .user;
 
-      if (user == null) {
-        return Future.value(false);
-      }
+      if (user == null) return Future.value(false);
 
-      users = Users(
-        // 🚀 Agora inicializamos a variável `users`
+      currentUser = Users(
         id: user.uid,
         email: email,
         userName: username,
@@ -45,157 +81,134 @@ class UsersServices extends ChangeNotifier {
         birthday: birthday,
       );
 
-      await saveUsersDetails(); // Salvar os detalhes no Firestore
-
-      notifyListeners(); // Notificar a UI que o usuário foi criado
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .set(currentUser!.toJson());
+      notifyListeners();
       return Future.value(true);
     } on FirebaseAuthException catch (error) {
-      print("Erro ao criar usuário: ${error.code}");
+      print("❌ Erro ao criar usuário: ${error.code}");
       return Future.value(false);
     }
   }
 
-  Future<void> loadUserProfile() async {
-    User? firebaseUser = _auth.currentUser;
-    if (firebaseUser == null) {
-      print("⚠️ Nenhum usuário autenticado.");
-      return;
-    }
-
-    try {
-      print("🔄 Carregando perfil do usuário: ${firebaseUser.uid}");
-
-      DocumentSnapshot<Map<String, dynamic>> userDoc =
-          await _firestore.collection('users').doc(firebaseUser.uid).get();
-
-      if (userDoc.exists && userDoc.data() != null) {
-        print("✅ Perfil encontrado!");
-        currentUser = Users.fromJson(userDoc.data()!);
-      } else {
-        print("⚠️ Nenhum dado encontrado para este usuário.");
-        currentUser = Users(
-          id: firebaseUser.uid,
-          email: firebaseUser.email!,
-          userName: "Novo Usuário",
-          name: "Nome não disponível",
-        );
-      }
-
-      notifyListeners(); // 🚀 Atualiza a UI
-    } catch (e) {
-      print("❌ Erro ao carregar usuário: $e");
-    }
-  }
-
   Future<void> signIn(
-      {String? email,
-      String? password,
-      Function? onSucess,
-      Function? onFail}) async {
+      {required String email,
+      required String password,
+      required Function onSuccess,
+      required Function onFail}) async {
     try {
       print("🔐 Tentando autenticar usuário com email: $email");
 
+      // Limpa os dados do usuário anterior antes de autenticar
+      currentUser = null;
+      notifyListeners(); //
+
       User? user = (await _auth.signInWithEmailAndPassword(
-        email: email!,
-        password: password!,
+        email: email,
+        password: password,
       ))
           .user;
 
       print("✅ Usuário autenticado: ${user!.uid}");
 
-      await loadUserProfile(); // 🔄 Agora carregamos o perfil imediatamente após login
-      notifyListeners(); // 🚀 Garante que a UI seja atualizada após login
-
-      onSucess!(); // Chama o callback de sucesso
+      await loadCurrentUser();
+      notifyListeners();
+      onSuccess();
     } on FirebaseAuthException catch (e) {
-      String code;
+      String message = "Erro ao autenticar usuário.";
       if (e.code == 'invalid-email') {
-        code = 'Email informado é inválido';
+        message = 'Email informado é inválido.';
       } else if (e.code == 'wrong-password') {
-        code = 'A senha informada está errada';
+        message = 'A senha informada está errada.';
       } else if (e.code == 'user-disabled') {
-        code = 'Já existe cadastro com este email!!';
-      } else {
-        code = "Algum erro aconteceu na Plataforma do Firebase";
+        message = 'Conta desativada.';
       }
-      print("❌ Erro ao autenticar: $code");
-      onFail!(code);
+      print("❌ $message");
+      onFail(message);
     }
   }
 
-  //salvar dados do usuario no Firestore p gravar dados
-  saveUsersDetails() async {
-    await _firestoreRef.set(users!.toJson());
-  }
-
-  Future<void> _loadingCurrentUser({User? user}) async {
-    print("🔄 Chamando _loadingCurrentUser()...");
-
-    try {
-      User? currentUser = user ?? _auth.currentUser;
-      if (currentUser == null) {
-        print(
-            "⚠️ Nenhum usuário autenticado, abortando _loadingCurrentUser().");
-        return;
-      }
-
-      DocumentSnapshot<Map<String, dynamic>> docUser =
-          await _firestore.collection('users').doc(currentUser.uid).get();
-
-      if (docUser.exists && docUser.data() != null) {
-        print("✅ Usuário encontrado no Firebase!");
-        users = Users.fromJson(docUser.data()!); // ✅ Conversão correta
-      } else {
-        print(
-            "⚠️ Nenhum dado encontrado para este usuário, criando usuário temporário.");
-        users = Users(
-          id: currentUser.uid,
-          email: currentUser.email!,
-          userName: "Novo Usuário",
-          name: "Sem Nome",
-        );
-      }
-
-      notifyListeners(); // 🚀 Garante que a UI seja atualizada
-    } catch (e) {
-      print("❌ Erro ao carregar usuário: $e");
-    }
-  }
-
-  // Método para atualizar os dados do perfil do usuário
   Future<void> updateUserProfile(
     String name,
     String username,
-    String email,
+    String newEmail,
     String birthday,
     String gender,
+    String
+        currentPassword, // 🚀 Senha necessária para reautenticar antes da alteração
   ) async {
-    if (currentUser == null || currentUser!.id == null) return;
+    if (currentUser == null) return;
 
     try {
+      print("🔄 Iniciando atualização do perfil para ID: ${currentUser!.id}");
+
+      User? user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        print("❌ Nenhum usuário autenticado.");
+        return;
+      }
+
+      bool emailChanged = newEmail != user.email;
+      bool reauthenticated = false;
+
+      if (emailChanged) {
+        print("📢 Novo e-mail detectado: $newEmail. Reautenticando usuário...");
+
+        try {
+          AuthCredential credential = EmailAuthProvider.credential(
+            email: user.email!,
+            password: currentPassword,
+          );
+
+          await user.reauthenticateWithCredential(credential);
+          print("✅ Reautenticação bem-sucedida!");
+          reauthenticated = true;
+        } catch (e) {
+          print("❌ Erro na reautenticação: $e");
+          throw "Senha incorreta!"; // 🚨 Interrompe a execução para evitar erros
+        }
+      }
+
+      // 🚀 Se o e-mail mudou e a reautenticação foi bem-sucedida, atualiza o Firebase Authentication
+      if (emailChanged && reauthenticated) {
+        try {
+          await user.updateEmail(newEmail);
+          print(
+              "✅ E-mail atualizado no Firebase Authentication para: $newEmail");
+        } catch (e) {
+          print("❌ Erro ao atualizar e-mail no Firebase Authentication: $e");
+          throw "Falha ao atualizar e-mail no Firebase!"; // 🚨 Interrompe antes de modificar o Firestore
+        }
+      }
+
+      // 🚀 Atualizar os outros dados no Firestore
       await _firestore.collection('users').doc(currentUser!.id).update({
         'name': name,
         'userName': username,
-        'email': email,
+        'email': newEmail, // 🔹 Garantindo a atualização no Firestore
         'birthday': birthday,
         'gender': gender,
       });
 
-      // Atualiza os dados localmente sem precisar recarregar do Firestore
+      print("✅ Perfil atualizado no Firestore!");
+
+      // 🔹 Atualizar os dados localmente
       currentUser = Users(
         id: currentUser!.id,
         name: name,
         userName: username,
-        email: email,
+        email: newEmail,
         birthday: birthday,
         gender: gender,
       );
 
-      notifyListeners(); // 🚀 Atualiza a UI automaticamente
-
-      print("🎉 Perfil atualizado com sucesso!");
+      notifyListeners();
     } catch (e) {
       print("❌ Erro ao atualizar perfil: $e");
+      throw e; // 🚨 Lança erro para ser tratado na interface
     }
   }
 
@@ -203,94 +216,56 @@ class UsersServices extends ChangeNotifier {
     _auth.userChanges().listen((User? user) async {
       print("📢 Detectando mudanças no usuário...");
 
-      if (user != null) {
-        print("✅ Novo e-mail detectado: ${user.email}");
+      if (user != null && currentUser != null) {
+        if (user.email != currentUser!.email) {
+          print("🚀 Atualizando e-mail no Firestore...");
+          await _firestore.collection('users').doc(currentUser!.id).update({
+            'email': user.email!,
+          });
 
-        // Garantir que users não seja null antes de atualizar
-        if (users == null || users!.id == null) {
-          print(
-              "⚠️ Nenhum usuário carregado, abortando atualização de e-mail.");
-          return;
+          currentUser!.email = user.email!;
+          notifyListeners();
         }
-
-        // Verifica se o e-mail no Firestore já está atualizado
-        print("🔍 E-mail atual no Firestore: ${users!.email}");
-
-        if (user.email != users!.email) {
-          print("🚀 Atualizando e-mail no Firestore para: ${user.email}");
-
-          try {
-            await _firestore.collection('users').doc(users!.id).update({
-              'email': user.email!,
-            });
-
-            users!.email = user.email!;
-            notifyListeners();
-            print("🎉 E-mail atualizado no Firestore com sucesso!");
-          } catch (e) {
-            print("❌ Erro ao atualizar e-mail no Firestore: $e");
-          }
-        } else {
-          print("⚠️ O e-mail no Firestore já está atualizado.");
-        }
-      } else {
-        print("❌ Nenhum usuário autenticado.");
       }
     });
   }
 
-  // Método para excluir a conta do usuário
-  Future<void> deleteUserAccount() async {
-    if (users == null || users!.id == null) return;
-
-    try {
-      // Exclui os dados do Firestore
-      await _firestore.collection('users').doc(users!.id).delete();
-
-      // Exclui a conta do Firebase Authentication
-      await _auth.currentUser!.delete();
-
-      // Reseta os dados locais
-      users = null;
-
-      notifyListeners(); // Atualiza a interface
-    } catch (e) {
-      debugPrint("Erro ao excluir conta: $e");
-    }
-  }
-
-  // Método para alterar a senha do usuário autenticado
-  Future<String?> changePassword(
-      String currentPassword, String newPassword) async {
-    try {
-      User? user = _auth.currentUser;
-
-      if (user == null) {
-        return "Usuário não autenticado.";
-      }
-
-      // Reautenticar usuário antes de alterar a senha
-      AuthCredential credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: currentPassword,
-      );
-
-      await user.reauthenticateWithCredential(credential);
-      await user.updatePassword(newPassword);
-
-      return null; // Indica que a alteração foi bem-sucedida
-    } catch (e) {
-      return e
-          .toString(); // Retorna o erro como string para ser tratado na View
-    }
-  }
-
-// Método para logout do usuário
   Future<void> logout() async {
     await _auth.signOut();
-    currentUser = null; // Limpa os dados do usuário autenticado
-    notifyListeners(); // Atualiza a UI
+    currentUser = null;
+    notifyListeners(); // 🚀 Atualiza a UI imediatamente
+    print("✅ Logout realizado com sucesso!");
   }
+
+  // Método para excluir a conta do usuário
+  Future<void> deleteUserAccount(BuildContext context) async {
+  if (currentUser == null || currentUser!.id == null) return;
+
+  try {
+    // 🔥 Exclui os dados do Firestore
+    await _firestore.collection('users').doc(currentUser!.id).delete();
+
+    // Exclui a conta do Firebase Authentication
+    await _auth.currentUser!.delete();
+
+    // 🔥 Reseta os dados locais
+    currentUser = null;
+
+    notifyListeners(); // 🚀 Atualiza a interface
+
+    // 🔄 Fecha todas as telas e vai para a tela de login
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => LoginPage()), // 🔹 Altere para a sua tela de login
+      (route) => false, // 🔥 Remove todas as rotas anteriores da pilha
+    );
+
+    print("✅ Conta excluída e usuário redirecionado para login!");
+  } catch (e) {
+    debugPrint("❌ Erro ao excluir conta: $e");
+  }
+}
+
 
   Future<bool> resetPassword(String email) async {
     try {
@@ -302,4 +277,5 @@ class UsersServices extends ChangeNotifier {
       return false;
     }
   }
+
 }

@@ -130,13 +130,10 @@ class _BoardDetailPageState extends State<BoardDetailPage> {
                               children: [
                                 Text(
                                   task.title,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  style: const TextStyle(),
                                 ),
                                 //se tiver prazo mostrar a data
-                                if (task.dueDate !=
-                                    null) 
+                                if (task.dueDate != null)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 4.0),
                                     child: Row(

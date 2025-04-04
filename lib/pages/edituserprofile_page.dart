@@ -11,183 +11,297 @@ class EditUserProfilePage extends StatefulWidget {
 
 class _EditUserProfilePageState extends State<EditUserProfilePage> {
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController nameController;
-  late TextEditingController usernameController;
-  late TextEditingController emailController;
-  late TextEditingController birthdayController;
-  String _gender = "Feminino"; // Agora começa com Feminino
 
-  bool isLoading = false;
+  TextEditingController nameController = TextEditingController();
+  TextEditingController usernameController = TextEditingController();
+  TextEditingController emailController = TextEditingController();
+  TextEditingController birthdayController = TextEditingController();
+  TextEditingController passwordController = TextEditingController();
+  String _gender = "Feminino";
+
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    final user = Provider.of<UsersServices>(context, listen: false).currentUser;
-    nameController = TextEditingController(text: user?.name ?? "");
-    usernameController = TextEditingController(text: user?.userName ?? "");
-    emailController = TextEditingController(text: user?.email ?? "");
-    birthdayController = TextEditingController(text: user?.birthday ?? "");
+    final usersServices = Provider.of<UsersServices>(context, listen: false);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await usersServices.loadCurrentUser();
+
+      if (usersServices.currentUser != null) {
+        setState(() {
+          nameController.text = usersServices.currentUser!.name!;
+          usernameController.text = usersServices.currentUser!.userName!;
+          emailController.text = usersServices.currentUser!.email!;
+          birthdayController.text = usersServices.currentUser!.birthday!;
+          _gender = usersServices.currentUser!.gender!;
+          isLoading = false;
+        });
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final usersServices = Provider.of<UsersServices>(context, listen: false);
+    return Consumer<UsersServices>(
+      builder: (context, usersServices, child) {
+        final user = usersServices.currentUser;
 
-    return Scaffold(
-      backgroundColor: const Color.fromRGBO(11, 116, 116, 1.000),
-      appBar: AppBar(
-        title:
-            const Text("Editar Perfil", style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.teal[700],
-        actions: [
-          isLoading
-              ? const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: CircularProgressIndicator(color: Colors.white),
-                )
-              : IconButton(
-                  icon: const Icon(Icons.save, color: Colors.white),
-                  onPressed: () async {
-                    if (_formKey.currentState!.validate()) {
-                      setState(() => isLoading = true);
-                      await usersServices.updateUserProfile(
-                        nameController.text,
-                        usernameController.text,
-                        emailController.text,
-                        birthdayController.text,
-                        _gender,
-                      );
-                      setState(() => isLoading = false);
-                      Navigator.pop(context);
-                    }
-                  },
+        if (isLoading || user == null) {
+          return Scaffold(
+            backgroundColor: const Color.fromRGBO(11, 116, 116, 1.000),
+            appBar: _buildAppBar(),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: const Color.fromRGBO(11, 116, 116, 1.000),
+          appBar: _buildAppBar(),
+          body: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Center(
+              child: Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              _buildTextField(nameController, 'Nome'),
-              const SizedBox(height: 10),
-              _buildTextField(usernameController, 'Usuário'),
-              const SizedBox(height: 10),
-              _buildTextField(emailController, 'E-mail'),
-              const SizedBox(height: 10),
-              _buildTextField(birthdayController, 'Data de Nascimento'),
-              const SizedBox(height: 10),
-              const Text("Gênero",
-                  style: TextStyle(color: Colors.white, fontSize: 16)),
-              Column(
-                children: [
-                  _buildGenderRadio("Feminino"),
-                  _buildGenderRadio("Masculino"),
-                  _buildGenderRadio("Não-Binário"),
-                ],
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: isLoading
-                    ? null
-                    : () async {
-                        if (_formKey.currentState!.validate()) {
-                          setState(() => isLoading = true);
-                          await usersServices.updateUserProfile(
-                            nameController.text,
-                            usernameController.text,
-                            emailController.text,
-                            birthdayController.text,
-                            _gender,
-                          );
-                          setState(() => isLoading = false);
-                          Navigator.pop(context);
-                        }
-                      },
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                  backgroundColor: Colors.blue,
-                ),
-                child: const Text("Salvar Alterações",
-                    style: TextStyle(fontSize: 16)),
-              ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, '/changePassword');
-                },
-                child: const Text("Mudar Senha",
-                    style: TextStyle(color: Colors.white)),
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) {
-                      return AlertDialog(
-                        title: const Text("Excluir Conta"),
-                        content: const Text(
-                            "Tem certeza que deseja excluir sua conta? Todos os seus dados serão apagados permanentemente."),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text("Cancelar"),
+                elevation: 4,
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildTextField(nameController, 'Nome'),
+                        const SizedBox(height: 10),
+                        _buildTextField(usernameController, 'Usuário'),
+                        const SizedBox(height: 10),
+                        _buildTextField(emailController, 'E-mail'),
+                        const SizedBox(height: 10),
+                        _buildTextField(
+                            birthdayController, 'Data de Nascimento'),
+                        const SizedBox(height: 5),
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4.0),
+                          child: Text("Gênero",
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontSize: 14,
+                              )),
+                        ),
+                        const SizedBox(height: 5),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            _buildGenderRadio("Feminino"),
+                            _buildGenderRadio("Masculino"),
+                            _buildGenderRadio("Não-Binário"),
+                          ],
+                        ),
+                        const SizedBox(height: 25),
+                        _buildTextField(passwordController,
+                            'Senha Atual (Obrigatório para alterações)',
+                            obscureText: true),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          onPressed: isLoading
+                              ? null
+                              : () async {
+                                  if (_formKey.currentState!.validate()) {
+                                    try {
+                                      setState(() => isLoading = true);
+
+                                      await usersServices.updateUserProfile(
+                                        nameController.text,
+                                        usernameController.text,
+                                        emailController.text,
+                                        birthdayController.text,
+                                        _gender,
+                                        passwordController
+                                            .text, // 🔹 Senha atual para reautenticação
+                                      );
+
+                                      setState(() => isLoading = false);
+                                      Navigator.pop(context);
+                                    } catch (error) {
+                                      setState(() => isLoading = false);
+                                      _showErrorDialog(error
+                                          .toString()); // 🔹 Exibir erro caso a senha esteja errada
+                                    }
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 50),
+                            backgroundColor:
+                                const Color.fromARGB(255, 52, 168, 67),
                           ),
-                          ElevatedButton(
-                            onPressed: () async {
-                              await usersServices.deleteUserAccount();
-                              Navigator.pop(context);
-                              Navigator.pop(context);
-                            },
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red),
-                            child: const Text("Excluir"),
+                          child: const Text(
+                            "Salvar Alterações",
+                            style: TextStyle(fontSize: 16, color: Colors.white),
                           ),
-                        ],
-                      );
-                    },
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  minimumSize: const Size(double.infinity, 50),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  await usersServices
+                                      .resetPassword(user.email!);
+                                  _showPasswordResetDialog();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  minimumSize: const Size(double.infinity, 50),
+                                ),
+                                child: const Text("Mudar Senha",
+                                    style: TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  _showDeleteAccountDialog(usersServices);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  minimumSize: const Size(double.infinity, 50),
+                                ),
+                                child: const Text("Excluir Conta",
+                                    style: TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: const Text("Excluir Conta"),
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label) {
+  AppBar _buildAppBar() {
+    return AppBar(
+      title: const Text("Editar Perfil", style: TextStyle(color: Colors.white)),
+      backgroundColor: Colors.teal[700],
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label,
+      {bool readOnly = false, bool obscureText = false}) {
     return TextFormField(
       controller: controller,
+      readOnly: readOnly,
+      obscureText: obscureText, 
+      style: const TextStyle(color: Colors.black),
       decoration: InputDecoration(
         labelText: label,
+        labelStyle: const TextStyle(color: Colors.black),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         contentPadding:
             const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       ),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return "Por favor, insira $label";
+        }
+        return null;
+      },
     );
   }
 
-  // Função para gerar os RadioListTile
   Widget _buildGenderRadio(String value) {
-    return RadioListTile(
-      title: Text(value, style: TextStyle(color: Colors.white)),
-      value: value,
-      groupValue: _gender,
-      activeColor: const Color.fromARGB(255, 255, 255, 255), // Cor da seleção
-      selectedTileColor:
-          Colors.teal.withOpacity(0.2), // Fundo levemente destacado
-      onChanged: (newValue) {
-        setState(() {
-          _gender = newValue!;
-        });
+    return Row(
+      children: [
+        Radio(
+          value: value,
+          groupValue: _gender,
+          activeColor: Colors.teal[700],
+          onChanged: (newValue) {
+            setState(() {
+              _gender = newValue!;
+            });
+          },
+        ),
+        Text(value, style: const TextStyle(color: Colors.black)),
+      ],
+    );
+  }
+
+  void _showPasswordResetDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("E-mail enviado"),
+          content: const Text(
+              "Um e-mail foi enviado para que você possa redefinir sua senha."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDeleteAccountDialog(UsersServices usersServices) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Excluir Conta"),
+          content: const Text(
+              "Tem certeza que deseja excluir sua conta? Todos os seus dados serão apagados permanentemente."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await usersServices.deleteUserAccount(context);
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child:
+                  const Text("Excluir", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Erro",
+              style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK",
+                  style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
+            ),
+          ],
+        );
       },
     );
   }
